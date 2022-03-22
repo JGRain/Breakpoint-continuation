@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+  <style>
+    .progress {
+      width: 480px;
+      height: 12px;
+      border: 1px solid #ccc;
+      margin-top: 12px;
+      position: relative;
+    }
+
+    .icon {
+      height: 12px;
+      background-color: red;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+  </style>
+</head>
+
+<body>
+  <div>
+    <input type="file" id="btnFile" onchange="uploadFile(0)">
+    <input type="button" value="取消上传" onclick="deleteUpload()">
+  </div>
+  <div class="progress">
+    <div class="icon" id="btnProgress"></div>
+  </div>
+</body>
+<script src="https://cdn.bootcdn.net/ajax/libs/axios/0.21.1/axios.min.js"></script>
+<script>
+  const chunkSize = 1024 * 1024;
+
+  let isDelete = false;
+
+  // 中断上传
+  function deleteUpload () {
+    isDelete = true;
+  }
+
+  // 上传文件
+  function uploadFile (index) {
+    if (isDelete) {
+      return;
+    }
+    const btnFile = document.getElementById('btnFile');
+    const btnProgress = document.getElementById('btnProgress')
+
+    if (btnFile.files.length > 0) {
+      const file = btnFile.files[0];
+      const [fname, fext] = file.name.split('.');
+      const start = index * chunkSize;
+      if (start > file.size) {
+        console.log(file)
+        merge(file.name)
+        return;
+      }
+
+      let blob = null;
+      if (start + chunkSize > file.size) {
+        blob = file.slice(start, file.size);
+      } else {
+        blob = file.slice(start, start + chunkSize);
+      }
+      const blobName = `${fname}.${index}.${fext}`;
+
+      const blobFile = new File([blob], blobName);
+
+
+      const formData = new FormData();
+      formData.append('file', blobFile);
+
+      axios.post('/upload', formData).then((res) => {
+
+        // 90 是模拟数据
+        btnProgress.style.width = (start / file.size) * 90 + '%';
+
+        // 模拟网络请求
+        setTimeout(() => {
+          uploadFile(++index);
+        }, 300);
+
+        // uploadFile(++index);
+      }).catch((err) => {
+
+      });
+
+    }
+  }
+
+  function merge (name) {
+    const btnProgress = document.getElementById('btnProgress')
+    axios.post('/merge', { name }).then((res) => {
+      console.log(res.data.url);
+
+      btnProgress.style.width = '100%';
+    }).catch((err) => {
+
+    });
+  }
+
+  async function uploadFile2 () {
+    const file = btnFile.files[0];
+    const { name, size, type } = file;
+    let start = 0;
+    let index = 0;
+    while (start < size) {
+      let blob = null;
+      if (start + chunkSize > size) {
+        blob = file.slice(start, size)
+      } else {
+        blob = file.slice(start, start + chunkSize)
+      }
+
+      start += chunkSize;
+      const blobFile = new File([blob], name);
+      const formData = new FormData();
+
+      formData.append('file', blobFile);
+      formData.append('index', index + '');
+      await axios.post('/upload', formData);
+      index++;
+      btnProgress.style.width = (start / file.size) * 100 + '%';
+    }
+
+    // 全部上传成功之后合并文件
+    await axios.post('/merge', { name });
+    btnProgress.style.width = '100%';
+  }
+</script>
+
+</html>
